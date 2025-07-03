@@ -20,6 +20,14 @@ def main():
     try:
         # Get port from environment variable or use default
         port = os.environ.get("PORT", "8000")
+        # Ensure port is an integer
+        try:
+            port_int = int(port)
+            port = str(port_int)  # Convert back to string for command
+        except ValueError:
+            logger.warning(f"Invalid PORT value: {port}, using default 8000")
+            port = "8000"
+            
         logger.info(f"Starting uvicorn on port {port}")
         
         # Start uvicorn with the FastAPI app

@@ -39,20 +39,17 @@ COPY . .
 # Ensure our Python startup scripts are executable
 COPY start_uvicorn.py /app/start_uvicorn.py
 RUN chmod +x /app/start_uvicorn.py
-
-# Create start script
-RUN echo '#!/bin/bash\n\
-export PATH="/app/venv/bin:$PATH"\n\
-exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}' > /app/start.sh && \
-chmod +x /app/start.sh
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
 # Set environment variables
 ENV PATH="/app/venv/bin:$PATH"
 ENV PYTHONPATH="/app:$PYTHONPATH"
+ENV PORT=8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8000}/_health || exit 1
+  CMD curl -f http://localhost:8000/_health || exit 1
 
 # Start command
 CMD ["/app/start.sh"]
