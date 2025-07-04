@@ -64,6 +64,17 @@ class Report(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Prompt(Base):
+    __tablename__ = "prompts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    content = Column(Text)
+    is_default = Column(Integer, default=0)  # 0 = not default, 1 = default
+    is_active = Column(Integer, default=0)   # 0 = not active, 1 = active
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # Create tables
 def create_tables():
     try:

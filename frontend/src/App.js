@@ -35,6 +35,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 
 import HelpDialog from './components/HelpDialog';
 import TemplateManager from './components/TemplateManager';
+import PromptManager from './components/PromptManager';
 import { downloadTextAsFile, generateDefaultFilename } from './utils/fileUtils';
 import useAudioRecorder from './hooks/useAudioRecorder';
 import useAudioDevices from './hooks/useAudioDevices';
@@ -156,6 +157,8 @@ function App() {
   const [transcription, setTranscription] = useState('');
   const [processedText, setProcessedText] = useState('');
   const [templates, setTemplates] = useState([]);
+  const [prompts, setPrompts] = useState([]);
+  const [activePromptId, setActivePromptId] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
@@ -198,9 +201,10 @@ function App() {
     }
   }, [transcription]);
 
-  // Load templates when component mounts
+  // Load templates and prompts when component mounts
   useEffect(() => {
     fetchTemplates();
+    fetchPrompts();
   }, []);
 
   // Check audio support and sync transcription
@@ -238,6 +242,24 @@ function App() {
     } catch (error) {
       console.error('Error fetching templates:', error);
       showNotification('Failed to fetch templates', 'error');
+    }
+  };
+  
+  const fetchPrompts = async () => {
+    try {
+      const response = await fetch(getApiEndpoint('prompts'));
+      const data = await response.json();
+      setPrompts(data);
+      
+      // Get active prompt
+      const activeResponse = await fetch(getApiEndpoint('prompts/active'));
+      if (activeResponse.ok) {
+        const activePrompt = await activeResponse.json();
+        setActivePromptId(activePrompt.id);
+      }
+    } catch (error) {
+      console.error('Error fetching prompts:', error);
+      showNotification('Failed to fetch prompts', 'error');
     }
   };
 
@@ -309,17 +331,23 @@ function App() {
     setIsProcessing(true);
     
     try {
+      const requestBody = {
+        text: transcription,
+        template_name: selectedTemplate || undefined,
+      };
+      
+      if (activePromptId) {
+        requestBody.prompt_id = activePromptId;
+      }
+      
       const response = await fetch(getApiEndpoint('process'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          text: transcription,
-          template_name: selectedTemplate || undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         let errorMessage;
@@ -464,6 +492,86 @@ function App() {
       showNotification('Failed to delete template', 'error');
     }
   };
+  
+  const handleAddPrompt = async (prompt) => {
+    try {
+      const response = await fetch(getApiEndpoint('prompts'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(prompt),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add prompt');
+      }
+      
+      await fetchPrompts();
+      showNotification('Prompt added successfully', 'success');
+    } catch (error) {
+      console.error('Error adding prompt:', error);
+      showNotification('Failed to add prompt', 'error');
+    }
+  };
+
+  const handleEditPrompt = async (prompt) => {
+    try {
+      const response = await fetch(getApiEndpoint(`prompts/${prompt.id}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(prompt),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update prompt');
+      }
+      
+      await fetchPrompts();
+      showNotification('Prompt updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating prompt:', error);
+      showNotification('Failed to update prompt', 'error');
+    }
+  };
+
+  const handleDeletePrompt = async (promptId) => {
+    try {
+      const response = await fetch(getApiEndpoint(`prompts/${promptId}`), {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete prompt');
+      }
+      
+      await fetchPrompts();
+      showNotification('Prompt deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting prompt:', error);
+      showNotification('Failed to delete prompt', 'error');
+    }
+  };
+  
+  const handleActivatePrompt = async (promptId) => {
+    try {
+      const response = await fetch(getApiEndpoint(`prompts/${promptId}/activate`), {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to activate prompt');
+      }
+      
+      await fetchPrompts();
+      showNotification('Prompt activated successfully', 'success');
+    } catch (error) {
+      console.error('Error activating prompt:', error);
+      showNotification('Failed to activate prompt', 'error');
+    }
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -515,6 +623,15 @@ function App() {
             onTemplateAdd={handleAddTemplate}
             onTemplateEdit={handleEditTemplate}
             onTemplateDelete={handleDeleteTemplate}
+          />
+          <Divider sx={{ my: 2 }} />
+          <PromptManager 
+            prompts={prompts}
+            activePromptId={activePromptId}
+            onPromptAdd={handleAddPrompt}
+            onPromptEdit={handleEditPrompt}
+            onPromptDelete={handleDeletePrompt}
+            onPromptActivate={handleActivatePrompt}
           />
         </Drawer>
 

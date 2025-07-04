@@ -1,59 +1,71 @@
 # Radiology Transcription Assistant
 
-A web application to assist with radiology report transcription. This app listens to the microphone, transcribes speech in real-time, and processes the transcription using Gemini AI to create structured, professional radiology reports.
+A web application to assist with radiology report transcription. This app listens to the microphone, transcribes speech in real-time, and processes the transcription using Claude AI to create structured, professional radiology reports.
 
 ## Features
 
 - Real-time speech-to-text transcription using Whisper API
-- LLM processing with Google's Gemini API to format and structure reports
+- LLM processing with Anthropic's Claude API to format and structure reports
 - Template-based report generation
+- Prompt management for customizing AI instructions
 - Modern, responsive UI built with React and Material UI
 - WebSocket connection for real-time updates
+
+## Prompt Management Feature
+
+The application includes a prompt management system that allows users to create, edit, delete, and activate different prompts for the AI model. This feature enables customization of how the AI processes and formats radiology reports.
+
+### Key Features
+
+- **Multiple Prompts**: Create and manage multiple prompts for different reporting styles or requirements
+- **Default Prompt**: A non-deletable default prompt is always available
+- **Active Prompt Selection**: Set any prompt as the active one to be used for report generation
+- **Prompt Protection**: Default prompt cannot be deleted or modified to ensure system stability
+- **Integration with Templates**: Prompts work alongside templates for comprehensive report customization
 
 ## Project Structure
 
 ```
-Rad_transcription/
-├── backend/               # FastAPI backend
-│   ├── main.py            # Main application file
-│   ├── requirements.txt   # Python dependencies
-│   └── .env.example       # Environment variables template
-├── frontend/              # React frontend
-│   ├── src/               # Source code
-│   │   ├── components/    # React components
-│   │   ├── App.js         # Main application component
-│   │   └── ...            # Other React files
-│   └── package.json       # Node.js dependencies
-└── templates/             # Report templates
+ProRad_Clean/
+├── main.py                # FastAPI backend application
+├── database.py           # Database models and connection
+├── requirements.txt      # Python dependencies
+├── .env                  # Environment variables
+├── frontend/             # React frontend
+│   ├── src/              # Source code
+│   │   ├── components/   # React components
+│   │   │   ├── PromptManager.js  # Prompt management component
+│   │   │   ├── TemplateManager.js # Template management component
+│   │   │   └── ...       # Other components
+│   │   ├── utils/        # Utility functions
+│   │   ├── App.js        # Main application component
+│   │   └── ...           # Other React files
+│   └── package.json      # Node.js dependencies
+└── DEPLOYMENT.md         # Deployment instructions
 ```
 
 ## Setup Instructions
 
 ### Backend Setup
 
-1. Navigate to the backend directory:
-   ```
-   cd backend
-   ```
-
-2. Create a virtual environment:
+1. Create a virtual environment:
    ```
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. Install dependencies:
+2. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
 
-4. Create a `.env` file based on `.env.example` and add your API keys:
+3. Create a `.env` file and add your API keys:
    ```
-   cp .env.example .env
+   CLAUDE_API_KEY=your_anthropic_api_key_here
+   DATABASE_URL=your_database_url_here  # Optional, defaults to SQLite if not provided
    ```
-   Then edit the `.env` file to add your Gemini API key and Replicate API token.
 
-5. Start the backend server:
+4. Run the backend server:
    ```
    uvicorn main:app --reload
    ```
@@ -70,15 +82,26 @@ Rad_transcription/
    npm install
    ```
 
-3. Start the development server:
+3. Create a `.env` file in the frontend directory (optional for development):
+   ```
+   REACT_APP_API_URL=http://localhost:8001
+   ```
+
+4. Start the development server:
    ```
    npm start
    ```
 
+5. Open your browser and navigate to `http://localhost:3000`
+
 ## API Keys Required
 
-- **Gemini API Key**: Get from [Google AI Studio](https://ai.google.dev/)
+- **Claude API Key**: Get from [Anthropic](https://www.anthropic.com/) for Claude AI access
 - **Replicate API Token**: Get from [Replicate](https://replicate.com/) for Whisper API access
+
+## Deployment
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Usage
 

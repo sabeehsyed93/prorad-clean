@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import database and reports modules
-from database import create_tables, get_db, SessionLocal, Template as DBTemplate, Report
+from database import create_tables, get_db, SessionLocal, Template as DBTemplate, Report, Prompt as DBPrompt
 import reports
 
 # Load environment variables
@@ -167,17 +167,11 @@ def init_templates(db: Session):
             template = DBTemplate(name=name, content=content)
             db.add(template)
     db.commit()
-
-# Try to initialize the database and templates
-create_tables()
-
-# Initialize templates
-with SessionLocal() as db:
-    init_templates(db)
-
+# Define request and response models
 class ProcessTextRequest(BaseModel):
     text: str
     template_name: Optional[str] = None
+    prompt_id: Optional[int] = None
 
 class Template(BaseModel):
     name: str
@@ -185,6 +179,39 @@ class Template(BaseModel):
     
     class Config:
         from_attributes = True
+
+class PromptBase(BaseModel):
+    name: str
+    content: str
+    
+class PromptCreate(PromptBase):
+    pass
+    
+class PromptUpdate(PromptBase):
+    pass
+    
+class Prompt(PromptBase):
+    id: int
+    is_default: int
+    is_active: int
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    
+    class Config:
+        from_attributes = True
+
+# Default system prompt for radiology reports
+default_system_prompt = """You are an expert radiologist writing a radiology report. Convert transcribed speech into a professional report.
+Follow these guidelines:
+- Remove speech artifacts (um, uh, pauses, repetitions)
+- Write in clear, natural prose paragraphs
+- Use standard medical terminology
+- Be concise and clear
+- If something is not mentioned, state it as normal
+- Use precise measurements if provided
+- Highlight any critical findings
+- End with a brief impression
+- Start directly with the findings"""
 
 # Default templates to add if none exist
 default_templates = {
@@ -245,14 +272,34 @@ default_templates = {
     """
 }
 
-# Initialize default templates in database
-def init_templates(db: Session):
-    for name, content in default_templates.items():
-        existing = db.query(DBTemplate).filter(DBTemplate.name == name).first()
-        if not existing:
-            template = DBTemplate(name=name, content=content)
-            db.add(template)
-    db.commit()
+# Try to initialize the database and tables
+create_tables()
+
+# Initialize templates and prompts
+def init_database():
+    with SessionLocal() as db:
+        # Initialize templates
+        for name, content in default_templates.items():
+            existing = db.query(DBTemplate).filter(DBTemplate.name == name).first()
+            if not existing:
+                template = DBTemplate(name=name, content=content)
+                db.add(template)
+        
+        # Initialize default prompt
+        default_prompt = db.query(DBPrompt).filter(DBPrompt.is_default == 1).first()
+        if not default_prompt:
+            default_prompt = DBPrompt(
+                name="Default Radiologist Prompt",
+                content=default_system_prompt,
+                is_default=1,
+                is_active=1
+            )
+            db.add(default_prompt)
+        
+        db.commit()
+
+# Initialize database with templates and prompts
+init_database()
 
 # Routes
 @app.get("/health")
@@ -331,26 +378,28 @@ async def process_text(request: ProcessTextRequest, db: Session = Depends(get_db
             if db_template:
                 template_content = db_template.content
         
-        # Prepare template instruction if template exists
-        template_instruction = f"\nUse the following template structure:\n{template_content}" if template_content else ""
+        # Get the system prompt to use
+        system_prompt = default_system_prompt
         
-        # Create system prompt for Claude
-        system_prompt = """You are an expert radiologist writing a radiology report. Convert transcribed speech into a professional report.
-        Follow these guidelines:
-        - Remove speech artifacts (um, uh, pauses, repetitions)
-        - Write in clear, natural prose paragraphs
-        - Use standard medical terminology
-        - Be concise and clear
-        - If something is not mentioned, state it as normal
-        - Use precise measurements if provided
-        - Highlight any critical findings
-        - End with a brief impression
-        - Start directly with the findings"""
+        # If a prompt_id is provided, use that prompt
+        if request.prompt_id:
+            db_prompt = db.query(DBPrompt).filter(DBPrompt.id == request.prompt_id).first()
+            if db_prompt:
+                system_prompt = db_prompt.content
+        # Otherwise, use the active prompt if one exists
+        else:
+            active_prompt = db.query(DBPrompt).filter(DBPrompt.is_active == 1).first()
+            if active_prompt:
+                system_prompt = active_prompt.content
+        
+        # Add template instruction to system prompt if template exists
+        if template_content:
+            system_prompt = f"{system_prompt}\n\nUse the following template structure for the report:\n{template_content}"
         
         # Create user prompt with the transcribed text
         user_prompt = f"""Here is the transcribed speech to convert into a professional radiology report:
 
-{text}{template_instruction}
+{text}
 
 Please write in a natural, flowing style as a radiologist would dictate. Avoid breaking the report into many sections."""
         
@@ -462,6 +511,100 @@ async def delete_template(template_name: str, db: Session = Depends(get_db)):
     db.delete(db_template)
     db.commit()
     return {"message": f"Template '{template_name}' deleted successfully"}
+
+# Prompt management endpoints
+@app.get("/prompts", response_model=list[Prompt])
+async def get_prompts(db: Session = Depends(get_db)):
+    """Get all available prompts"""
+    prompts = db.query(DBPrompt).all()
+    return prompts
+
+@app.get("/prompts/active", response_model=Prompt)
+async def get_active_prompt(db: Session = Depends(get_db)):
+    """Get the currently active prompt"""
+    active_prompt = db.query(DBPrompt).filter(DBPrompt.is_active == 1).first()
+    if not active_prompt:
+        # If no active prompt, return the default prompt
+        active_prompt = db.query(DBPrompt).filter(DBPrompt.is_default == 1).first()
+        if not active_prompt:
+            raise HTTPException(status_code=404, detail="No active or default prompt found")
+    return active_prompt
+
+@app.post("/prompts", response_model=Prompt)
+async def create_prompt(prompt: PromptCreate, db: Session = Depends(get_db)):
+    """Create a new prompt"""
+    existing = db.query(DBPrompt).filter(DBPrompt.name == prompt.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Prompt with this name already exists")
+    
+    db_prompt = DBPrompt(
+        name=prompt.name,
+        content=prompt.content,
+        is_default=0,
+        is_active=0
+    )
+    db.add(db_prompt)
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
+
+@app.put("/prompts/{prompt_id}", response_model=Prompt)
+async def update_prompt(prompt_id: int, prompt: PromptUpdate, db: Session = Depends(get_db)):
+    """Update an existing prompt"""
+    db_prompt = db.query(DBPrompt).filter(DBPrompt.id == prompt_id).first()
+    if not db_prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    
+    # Don't allow modifying the default prompt
+    if db_prompt.is_default == 1:
+        raise HTTPException(status_code=400, detail="Cannot modify the default prompt")
+    
+    # Update prompt fields
+    db_prompt.name = prompt.name
+    db_prompt.content = prompt.content
+    
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
+
+@app.post("/prompts/{prompt_id}/activate", response_model=Prompt)
+async def activate_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    """Set a prompt as active"""
+    # First, find the prompt to activate
+    db_prompt = db.query(DBPrompt).filter(DBPrompt.id == prompt_id).first()
+    if not db_prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    
+    # Deactivate all prompts
+    db.query(DBPrompt).update({"is_active": 0})
+    
+    # Activate the selected prompt
+    db_prompt.is_active = 1
+    
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
+
+@app.delete("/prompts/{prompt_id}")
+async def delete_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    """Delete a prompt"""
+    db_prompt = db.query(DBPrompt).filter(DBPrompt.id == prompt_id).first()
+    if not db_prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    
+    # Don't allow deleting the default prompt
+    if db_prompt.is_default == 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the default prompt")
+    
+    # If this is the active prompt, activate the default prompt instead
+    if db_prompt.is_active == 1:
+        default_prompt = db.query(DBPrompt).filter(DBPrompt.is_default == 1).first()
+        if default_prompt:
+            default_prompt.is_active = 1
+    
+    db.delete(db_prompt)
+    db.commit()
+    return {"message": f"Prompt '{db_prompt.name}' deleted successfully"}
 
 @app.get("/recent-reports/")
 async def get_recent_reports(limit: int = 10, db: Session = Depends(get_db)):
