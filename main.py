@@ -648,5 +648,6 @@ async def get_report_by_id(report_id: int, db: Session = Depends(get_db)):
 if __name__ == "__main__":
     import uvicorn
     # Get port from environment variable (for Railway) or use default
+    # Railway will automatically assign the port when deployed
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

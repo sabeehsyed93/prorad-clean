@@ -12,11 +12,25 @@ logger = logging.getLogger(__name__)
 
 # Create database engine
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Check for Railway PostgreSQL environment variables
+PG_HOST = os.getenv("PGHOST")
+PG_USER = os.getenv("PGUSER")
+PG_PASSWORD = os.getenv("PGPASSWORD")
+PG_DATABASE = os.getenv("POSTGRES_DB")
+PG_PORT = os.getenv("PGPORT")
+
+# If Railway PostgreSQL variables are present but no DATABASE_URL, construct it
+if not DATABASE_URL and PG_HOST and PG_USER and PG_PASSWORD and PG_DATABASE:
+    DATABASE_URL = f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+    logger.info("Constructed PostgreSQL DATABASE_URL from Railway environment variables")
+
+# Fallback to SQLite if no database connection info is available
 if not DATABASE_URL:
     logger.warning("No DATABASE_URL found in environment, falling back to SQLite")
     DATABASE_URL = "sqlite:///./radiology_reports.db"
 
-logger.info("Initializing database connection to: %s", DATABASE_URL.split("@")[0].split(":")[0])
+logger.info(f"Initializing database connection to: {DATABASE_URL.split('@')[0].split(':')[0]}")
 
 # Handle PostgreSQL database URLs
 if DATABASE_URL:
