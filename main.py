@@ -329,33 +329,8 @@ async def health_check_head():
 @app.get("/_health")
 async def railway_health_check():
     """Alternative health check endpoint specifically for Railway"""
-    db_status = "ok"
-    tables_status = "unknown"
-    try:
-        # Check database connection
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        
-        # Check if tables exist
-        try:
-            template_count = db.query(DBTemplate).count()
-            prompt_count = db.query(DBPrompt).count()
-            report_count = db.query(Report).count()
-            tables_status = f"ok (templates: {template_count}, prompts: {prompt_count}, reports: {report_count})"
-        except Exception as table_err:
-            tables_status = f"error: {str(table_err)}"
-            
-        db.close()
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-        
-    return {
-        "status": "ok",
-        "db_status": db_status,
-        "tables_status": tables_status,
-        "timestamp": datetime.datetime.now().isoformat(),
-        "service": "radiology-transcription-api"
-    }
+    # Simplest possible response for healthcheck
+    return {"status": "ok"}
 
 @app.head("/_health")
 async def railway_health_check_head():

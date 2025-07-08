@@ -64,8 +64,10 @@ ProRad is a radiology transcription assistant that helps radiologists convert th
 
 **Solution**:
 - Ensured both `/health` and `/_health` endpoints are properly implemented
-- Updated railway.toml to use the correct healthcheck path
+- Updated railway.toml to use the correct healthcheck path (`/_health`)
 - Added HEAD request support for health endpoints
+- Enhanced health check endpoints to provide detailed database status information
+- Increased healthcheck timeout to 60 seconds
 
 ### Issue 4: Model Import Confusion
 
@@ -75,7 +77,18 @@ ProRad is a radiology transcription assistant that helps radiologists convert th
 - Renamed SQLAlchemy model import to `DBPrompt` to avoid naming conflicts
 - Updated all database queries to use the correct model name
 
-### Issue 5: API URL Configuration
+### Issue 5: Database Initialization
+
+**Problem**: Database tables not being created properly during deployment
+
+**Solution**:
+- Created a dedicated database initialization script (`init_railway_db.py`)
+- Script explicitly creates all required tables and initializes default data
+- Updated deployment configuration to run this script before starting the application
+- Added detailed logging and verification steps
+- Script handles connection retries and provides clear error messages
+
+### Issue 6: API URL Configuration
 
 **Problem**: Frontend configured to use incorrect backend port
 
@@ -129,11 +142,14 @@ The `prompts` table includes:
 
 2. **Database**:
    - PostgreSQL database is provisioned by Railway
-   - Tables are created automatically on first run
+   - Tables are created by the `init_railway_db.py` script before application startup
+   - Default templates and prompts are automatically initialized
 
 3. **Deployment Configuration**:
    - railway.toml contains deployment settings
    - Procfile specifies the command to start the application
+   - Both are configured to run the database initialization script before starting the application
+   - Healthcheck is configured to use the `/_health` endpoint with a 60-second timeout
 
 ### Netlify Deployment
 
@@ -152,16 +168,21 @@ The `prompts` table includes:
    - Check PostgreSQL environment variables
    - Verify database URL format
    - Check database logs in Railway
+   - Run the `init_railway_db.py` script manually to diagnose issues
+   - Check the health endpoints (`/health` or `/_health`) for detailed database status
 
 2. **API Errors**:
    - Check application logs in Railway
    - Verify API key is set correctly
    - Test endpoints with curl or Postman
+   - Check the enhanced health endpoints for diagnostic information
 
 3. **Deployment Failures**:
    - Check railway.toml configuration
    - Verify Procfile format
    - Check for syntax errors in Python code
+   - Ensure database initialization script is running correctly
+   - Increase healthcheck timeout if needed
 
 ### Frontend Issues
 
