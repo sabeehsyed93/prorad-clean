@@ -305,8 +305,18 @@ init_database()
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring"""
+    db_status = "ok"
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+        
     return {
         "status": "ok",
+        "db_status": db_status,
         "timestamp": datetime.datetime.now().isoformat(),
         "service": "radiology-transcription-api"
     }
@@ -319,11 +329,39 @@ async def health_check_head():
 @app.get("/_health")
 async def railway_health_check():
     """Alternative health check endpoint specifically for Railway"""
-    return {"status": "ok"}
+    db_status = "ok"
+    tables_status = "unknown"
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        
+        # Check if tables exist
+        try:
+            template_count = db.query(DBTemplate).count()
+            prompt_count = db.query(DBPrompt).count()
+            report_count = db.query(Report).count()
+            tables_status = f"ok (templates: {template_count}, prompts: {prompt_count}, reports: {report_count})"
+        except Exception as table_err:
+            tables_status = f"error: {str(table_err)}"
+            
+        db.close()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+        
+    return {
+        "status": "ok",
+        "db_status": db_status,
+        "tables_status": tables_status,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "service": "radiology-transcription-api"
+    }
 
 @app.head("/_health")
 async def railway_health_check_head():
     """Alternative health check endpoint for HEAD requests"""
+    # For HEAD requests, we just need to return a 200 OK status
+    # The actual response body is ignored for HEAD requests
     return {"status": "ok"}
 
 @app.get("/")

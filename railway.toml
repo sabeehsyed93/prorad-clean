@@ -2,10 +2,10 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python -m uvicorn main:app --host 0.0.0.0"
+startCommand = "python init_railway_db.py && python -m uvicorn main:app --host 0.0.0.0"
 healthcheckPath = "/_health"
-healthcheckTimeout = 30
+healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 
 [nixpacks]
-start = "python -m uvicorn main:app --host 0.0.0.0"
+start = "python init_railway_db.py && python -m uvicorn main:app --host 0.0.0.0"
